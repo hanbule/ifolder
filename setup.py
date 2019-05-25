@@ -55,7 +55,6 @@ setup(
     license='MIT License',
     install_requires=[
         'tqdm',
-
           ],
     packages=find_packages(),
     platforms=["all"],
