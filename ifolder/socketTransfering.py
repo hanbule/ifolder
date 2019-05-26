@@ -3,6 +3,7 @@ import struct
 import os
 import socket
 from tqdm import tqdm
+import time
 
 def convert_size(size_bytes): 
     import math
@@ -14,17 +15,57 @@ def convert_size(size_bytes):
     size = round(size_bytes / power, 1) 
     return "%s %s" % (size, size_name[i])
 
+class _Transfer_progress():
+    def __init__(self):
+        self.pgr = {
+            'file_name':'',
+            'total_size':0,
+            'transferred_size':0,
+            'ETA':0,
+            'status':'running'
+        }
+        self.last_time = 0
+
+    def start_new_file(self, file_name, total_size):
+        self.pgr = {
+        'file_name':file_name,
+        'total_size':total_size,
+        'transferred_size':0,
+        'speed':0,
+        'ETA':0,
+        'status':True,
+        }
+        self.last_time = 0
+    def close(self):
+        self.pgr['status'] = False
+    
+    def update(self,new_transferred_size):
+        sample_time = time.time()
+        self.pgr['transferred_size'] += new_transferred_size
+        speed = (new_transferred_size/(sample_time - self.last_time))
+        self.pgr['speed'] = speed
+        try:
+            self.pgr['ETA'] = (self.pgr['total_size'] - self.pgr['transferred_size'])/speed
+        except:
+            pass
+        self.last_time = sample_time
+
+    def get(self):
+        return self.pgr
+
 # todo 中文路径处理
 # 空文件夹
 class Sender():
     def __init__(self, server_ip):
         self.receiver_ip = server_ip
         self.root_path = '/'
-        self.current_progress = 0
+        self.progress = _Transfer_progress()
+
         self.ignore = ['.DS_Store',]
+        
 
     def get_progress(self):
-        return self.current_progress  
+        return self.progress.get()  
        
     def _calc_root_of_paths(self, paths):
         if len(paths) == 1:
@@ -65,7 +106,6 @@ class Sender():
             if os.path.isfile(path):
                 self._send_a_file(path)
             elif os.path.isdir(path):
-                
                 self._send_a_folder(path)
             else:
                 print(path,' is neither a file nor a folder, will be skipped.')
@@ -73,6 +113,8 @@ class Sender():
         self._send_head(is_terminalted=True)
 
         self.sk.close()
+
+        self.progress.close()
         del self.sk
 
 
@@ -93,10 +135,11 @@ class Sender():
 
         SIZE = filesize
         with open(path, 'rb') as f:
+            self.progress.start_new_file(path,filesize)
+
             print('sending file: ', path,'({})'.format(convert_size(filesize)))
             with tqdm(total=SIZE) as pbar:
                 while filesize:
-                    self.current_progress = round((SIZE-filesize)*100/SIZE, 1)
                     # print('r:',filesize)
                     if filesize >= BUFFER:
                         content = f.read(BUFFER)
@@ -104,11 +147,13 @@ class Sender():
                         filesize -= BUFFER
                         
                         pbar.update(BUFFER)
+                        self.progress.update(BUFFER)
                     else:
                         content = f.read(filesize)
                         self.sk.send(content)
-                        
+                
                         pbar.update(filesize)
+                        self.progress.update(filesize)
                         break
 
     def _send_a_folder(self, rootDir):
@@ -269,11 +314,8 @@ if __name__ == '__main__':
 
     # files or folders to be sent. list
     files = [
-    # '/Users/vt/Desktop/TEST/TEST.pdf',
-    '/Users/vt/Desktop/TEST/icon',
-
+    '/Users/vt/Desktop/TEST/jp.rar',
     ]
-
     rx = Receiver()
     ip = rx.get_IP()
 
@@ -286,9 +328,17 @@ if __name__ == '__main__':
     thread2 = threading.Thread(
         target=lambda: tx.send(files))
 
+    # def consu():
+    #     while tx.get_progress()['status']:
+    #         print('- '*30 )
+    #         print(tx.get_progress() )
+    #         print('- '*30 )
+    #         time.sleep(0.5)
+
+    # threading.Thread(target=consu).start()
+
     thread1.start()
     thread2.start()
 
     thread1.join()
     thread2.join()
-
