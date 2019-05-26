@@ -187,6 +187,11 @@ class Receiver():
         self.IP = (host_ip, port)
         self.sk.listen(5)
 
+        self.progress = _Transfer_progress()
+
+    def get_progress(self):
+        return self.progress.get()  
+
     def _get_local_ip(self):
         local_ip = ""
         try:
@@ -253,7 +258,7 @@ class Receiver():
                     
                     with open(target_path, 'wb') as f:
                         print('getting file: ',  target_path, '({})'.format(convert_size(filesize)) )
-
+                        self.progress.start_new_file(target_path, filesize)
                         with tqdm(total=filesize) as pbar:
                             file_num += 1
                             rel_paths.append(head['relpath'])
@@ -263,12 +268,14 @@ class Receiver():
                                 if filesize >= BUFFER:
                                     content = self._recv_exactly_num_bytes(conn, BUFFER)
                                     pbar.update(BUFFER)
+                                    self.progress.update(BUFFER)
 
                                     filesize -= BUFFER
                                     f.write(content)
                                 else:
                                     content = self._recv_exactly_num_bytes(conn, filesize)
                                     pbar.update(filesize)
+                                    self.progress.update(filesize)
 
                                     f.write(content)
                                     break
@@ -277,7 +284,7 @@ class Receiver():
                 elif head['type'] == 'folder':
                     pass
         conn.close()
-        
+        self.progress.close()
         print(file_num, ' files received.')
 
         rel_path_set = set()
