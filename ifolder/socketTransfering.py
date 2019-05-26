@@ -21,6 +21,7 @@ class Sender():
         self.receiver_ip = server_ip
         self.root_path = '/'
         self.current_progress = 0
+        self.ignore = ['.DS_Store',]
 
     def get_progress(self):
         return self.current_progress  
@@ -47,7 +48,7 @@ class Sender():
 
         self.sk.send(json_head)
     
-    def send(self, files):
+    def send(self, files_and_folders):
         '''
         send files or folder to socket,
         argument should be a list
@@ -55,12 +56,16 @@ class Sender():
         self.sk = socket.socket()
         self.sk.connect(self.receiver_ip)
 
+        #  formatting path. known feature: remove \ at the end of dir path
+        files = [os.path.realpath(f) for f in files_and_folders]
+
         self._calc_root_of_paths(files)
 
         for path in files:
             if os.path.isfile(path):
                 self._send_a_file(path)
             elif os.path.isdir(path):
+                
                 self._send_a_folder(path)
             else:
                 print(path,' is neither a file nor a folder, will be skipped.')
@@ -72,8 +77,15 @@ class Sender():
 
 
     def _send_a_file(self, file):
-        self._send_head(file)
-        self._send_content(file)
+
+        file_name = os.path.basename(file)
+        # get the suffix of the file
+        suffix = os.path.splitext(file_name)[1] if not file_name.startswith('.') else os.path.splitext(file_name)[0]
+        if not suffix in self.ignore:
+            self._send_head(file)
+            self._send_content(file)
+        else:
+            print('file ignore:',file )
  
     def _send_content(self, path):
         BUFFER = 1024
@@ -163,7 +175,7 @@ class Receiver():
         path = path.strip()
         path = path.rstrip("\\")
 
-        if not os.path.exists(path ):
+        if not os.path.exists(path):
             os.makedirs(path)
             print(path ,' is created..')
             assert os.path.exists(path), 'path should have been created successfully.'
@@ -257,9 +269,9 @@ if __name__ == '__main__':
 
     # files or folders to be sent. list
     files = [
-    '/Users/vt/Desktop/TEST/TEST.pdf',
+    # '/Users/vt/Desktop/TEST/TEST.pdf',
     '/Users/vt/Desktop/TEST/icon',
-    '/Users/vt/Desktop/TEST/IBM', 
+
     ]
 
     rx = Receiver()
