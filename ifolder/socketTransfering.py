@@ -174,6 +174,7 @@ class Receiver():
     def save_files_to(self, path): 
         file_num = 0
         BUFFER = 1024
+        rel_paths = []
         conn, addr = self.sk.accept()
         print('start recving files...')
         while True:
@@ -183,7 +184,6 @@ class Receiver():
                 break
             else:
                 target_path = os.path.join(path, head['relpath'])
-
                 # ensure to have a valid loacal dir path, if not create one.   
                 self._mkdir(os.path.dirname(target_path))
                 
@@ -193,12 +193,14 @@ class Receiver():
                     SIZE = filesize
                     if os.path.exists(target_path):
                         print(target_path, ' already exists, will be overwritten.')
-
+                    
                     with open(target_path, 'wb') as f:
                         print('getting file: ',  target_path, '({})'.format(convert_size(filesize)) )
 
                         with tqdm(total=filesize) as pbar:
                             file_num += 1
+                            rel_paths.append(head['relpath'])
+
                             while filesize:
                                 # print('t:',filesize)
                                 if filesize >= BUFFER:
@@ -221,6 +223,33 @@ class Receiver():
         
         print(file_num, ' files received.')
 
+        rel_path_set = set()
+        for p in rel_paths:
+            rel_path_set.add(self._splitall(p)[0])
+        
+        local_paths = [os.path.join(path, rel_path)
+                        for rel_path in rel_path_set]
+        return local_paths
+
+    def _splitall(self,path):
+        '''
+        将路径按每个级别切割为列表
+        '''
+        allparts = []
+        while True:
+            parts = os.path.split(path)
+            if parts[0] == path:  # sentinel for absolute paths
+                allparts.insert(0, parts[0])
+                break
+            elif parts[1] == path: # sentinel for relative paths
+                allparts.insert(0, parts[1])
+                break
+            else:
+                path = parts[0]
+                allparts.insert(0, parts[1])
+        return allparts
+
+
 if __name__ == '__main__':
 
     import threading
@@ -230,7 +259,7 @@ if __name__ == '__main__':
     files = [
     '/Users/vt/Desktop/TEST/TEST.pdf',
     '/Users/vt/Desktop/TEST/icon',
-    '/Users/vt/Desktop/TEST/wonderbit', 
+    '/Users/vt/Desktop/TEST/IBM', 
     ]
 
     rx = Receiver()
@@ -250,6 +279,4 @@ if __name__ == '__main__':
 
     thread1.join()
     thread2.join()
-
-
 
